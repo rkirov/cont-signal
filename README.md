@@ -154,3 +154,4 @@ no current way to declare `read x and y independent of their values`.
 - [ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
 - [ ] add effects, i.e. computations that are recomputed without an explicit .value read.
 - [ ] some `async/await`-like synthetic sugar to make this acceptable for the JS developer. Or just wait for `do`-notation to land in ECMAScript. Try to use something like [https://github.com/pelotom/burrido](https://github.com/pelotom/burrido) to use generators?
+- [ ] error on non-reactive reads (i.e. .value) inside running continuations.
