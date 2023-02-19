@@ -1,5 +1,7 @@
 # Cont-Signal - Continuations based Signals JS framework
 
+[![Node.js CI](https://github.com/rkirov/cont-signal/actions/workflows/node.js.yml/badge.svg)](https://github.com/rkirov/cont-signal/actions/workflows/node.js.yml)
+
 ## How to use it
 
 This library provides an quite unorthodox implementation of what is currently
