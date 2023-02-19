@@ -73,7 +73,7 @@ class SignalImpl<T> implements Signal<T> {
     /**
      * Name is optional, used for debugging only.
      */
-    constructor(public __ct: ContValue<T>, public name?: string) { }
+    constructor(private ct: ContValue<T>, private name?: string) { }
     read<S>(f: (t: T) => S|SignalImpl<S>, name?: string): SignalImpl<S> {
         return new SignalImpl<S>(ct => {
             const val = this.value;
@@ -107,7 +107,7 @@ class SignalImpl<T> implements Signal<T> {
         // TODO: use counters trick to optimize this.
         // https://github.com/angular/angular/tree/a1b4c281f384cfd273d81ce10edc3bb2530f6ecf/packages/core/src/signals#equality-semantics
         for (let i of this.inputs) i.readers.delete(this.#ref);
-        this.__ct((x: T, inputs, upstreamState) => {
+        this.ct((x: T, inputs, upstreamState) => {
             if (upstreamState === State.CLEAN_AND_SAME_VALUE) {
                 this.state = State.CLEAN_AND_SAME_VALUE;
                 // inputs can't change if the downstream value was the same.
@@ -133,8 +133,7 @@ class InputImpl<T> extends SignalImpl<T> {
     readers: Set<WeakRef<SignalImpl<any>>> = new Set();
 
     constructor(private val: T, name?: string) {
-        // State.CLEAN_AND_SAME_VALUE is not possible here, because we handle that in the setter.
-        super(ct => ct(this.val, this.inputs, State.CLEAN_AND_DIFFERENT_VALUE), name);
+        super(_ => {throw new Error(`error: inputs continuation shouldn't be called`)}, name);
     }
     get value(): T {
         return this.val;
