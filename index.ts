@@ -1,7 +1,7 @@
 /**
  * Continuation-based signal implementation.
  * 
- * The external is just Signal<T> and Input<T> intefaces, 
+ * The external API is just Signal<T> and Input<T> intefaces, 
  * and a single constructor `input`.
  */
 
@@ -12,6 +12,10 @@ export interface Signal<T> {
 
 export interface Input<T> extends Signal<T> {
     set value(t: T);
+}
+
+export function input<T>(t: T, name?: string): Input<T> {
+    return new InputImpl(t, name);
 }
 
 const REFERENTIAL_EQUALITY = <T>(a: T, b: T) => a === b;
@@ -145,6 +149,3 @@ class InputImpl<T> extends SignalImpl<T> {
     }
 }
 
-export function input<T>(t: T, name?: string): Input<T> {
-    return new InputImpl(t, name);
-}
