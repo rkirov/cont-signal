@@ -1,5 +1,8 @@
 /**
  * Continuation-based signal implementation.
+ * 
+ * The external is just Signal<T> and Input<T> intefaces, 
+ * and a single constructor `input`.
  */
 
 export interface Signal<T> {
@@ -27,6 +30,8 @@ enum State {
  * - the state of the previous computation.
  */
 type Continuation<T> = (t: T, inputs: Set<InputImpl<any>>, state: State) => void;
+// In Haskell, this would be a value in the continuation monad, but I can't
+// find a standard way to name it so it is different from the continuation type.
 type ContValue<T> = (ct: Continuation<T>) => void;
 
 /**
@@ -34,7 +39,7 @@ type ContValue<T> = (ct: Continuation<T>) => void;
  */
  let COUNT = 0;
 
-class ReadOnlySignal<T> implements Signal<T> {
+class SignalImpl<T> implements Signal<T> {
     /**
      * True initially, so that the first read will trigger a computation.
      * After that, false when at least one input in the transitive closure has changed.
@@ -61,11 +66,12 @@ class ReadOnlySignal<T> implements Signal<T> {
     // TODO: make this configurable.
     protected eq: (a: T, b: T) => boolean = REFERENTIAL_EQUALITY;
 
-    __sameValueDuringLastComputation = false;
-
+    /**
+     * Name is optional, used for debugging only.
+     */
     constructor(public __ct: ContValue<T>, public name?: string) { }
-    read<S>(f: (t: T) => S|ReadOnlySignal<S>, name?: string): ReadOnlySignal<S> {
-        return new ReadOnlySignal<S>(ct => {
+    read<S>(f: (t: T) => S|SignalImpl<S>, name?: string): SignalImpl<S> {
+        return new SignalImpl<S>(ct => {
             const val = this.value;
             if (this.__state === State.CLEAN_AND_SAME_VALUE) {
                 // the first two values don't matter, because we are not going to use them.
@@ -74,10 +80,11 @@ class ReadOnlySignal<T> implements Signal<T> {
                 return;
             }
             const res = f(val);
+
             // Adding auto-wrapping of pure values, akin to JS promises.
-            // This means we can ever create Signal<Signal<T>>.
+            // This means we can never create Signal<Signal<T>>.
             // Are we trading off some capabilities for synthatic convenience?
-            if (!(res instanceof ReadOnlySignal)) return ct(res, this.__inputs, this.__state);
+            if (!(res instanceof SignalImpl)) return ct(res, this.__inputs, this.__state);
             
             const resV = res.value;
             ct(resV, new Set([...this.__inputs, ...res.__inputs]), this.__state);
@@ -116,10 +123,10 @@ class ReadOnlySignal<T> implements Signal<T> {
     }
 }
 
-class InputImpl<T> extends ReadOnlySignal<T> {
+class InputImpl<T> extends SignalImpl<T> {
     __inputs: Set<InputImpl<any>> = new Set([this]);
     // Using WeakRef here to avoid retaining reference to readers.
-    __readers: Set<WeakRef<ReadOnlySignal<any>>> = new Set();
+    __readers: Set<WeakRef<SignalImpl<any>>> = new Set();
 
     constructor(protected val: T, name?: string) {
         // State.CLEAN_AND_SAME_VALUE is not possible here, because we handle that in the setter.
