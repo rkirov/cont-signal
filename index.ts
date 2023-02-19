@@ -1,7 +1,7 @@
 /**
  * Continuation-based signal implementation.
  * 
- * The external API is just Signal<T> and Input<T> intefaces, 
+ * The external API is just Signal<T> and Input<T> interfaces, 
  * and a single constructor `input`.
  */
 
@@ -28,12 +28,12 @@ enum State {
 }
 
 /**
- * We need two extra pieces of information to propagete through the
+ * We need two extra pieces of information to propagate through the
  * continuations:
  * - the set of inputs that were read during the computation.
  * - the state of the previous computation.
  */
-type Continuation<T> = (t: T, inputs: Set<InputImpl<any>>, state: State) => void;
+type Continuation<T> = (t: T, inputs: Set<InputImpl<any>>, upstreamState: State) => void;
 // In Haskell, this would be a value in the continuation monad, but I can't
 // find a standard way to name it so it is different from the continuation type.
 type ContValue<T> = (ct: Continuation<T>) => void;
@@ -48,24 +48,24 @@ class SignalImpl<T> implements Signal<T> {
      * True initially, so that the first read will trigger a computation.
      * After that, false when at least one input in the transitive closure has changed.
      */
-    __state = State.DIRTY;
+    state = State.DIRTY;
 
     /**
-     * Cache value of the computation. Reresents the signal value only if state is CLEAN_.
+     * Cache value of the computation. Represents the signal value only if state is CLEAN_.
      */
-    private __value: T = null as any;
+    #cachedValue: T = null as any;
 
     /**
      * The set of inputs that were read during the last computation.
      * Since signals are dynamic, this can change from one computation to the next.
      */
-    __inputs: Set<InputImpl<any>> = new Set();
+    inputs: Set<InputImpl<any>> = new Set();
 
     /**
      * Global count of the number of signals created. Used for debugging.
      */
     id = COUNT++;
-    private ref = new WeakRef(this);
+    #ref = new WeakRef(this);
 
     // TODO: make this configurable.
     protected eq: (a: T, b: T) => boolean = REFERENTIAL_EQUALITY;
@@ -77,21 +77,21 @@ class SignalImpl<T> implements Signal<T> {
     read<S>(f: (t: T) => S|SignalImpl<S>, name?: string): SignalImpl<S> {
         return new SignalImpl<S>(ct => {
             const val = this.value;
-            if (this.__state === State.CLEAN_AND_SAME_VALUE) {
+            if (this.state === State.CLEAN_AND_SAME_VALUE) {
                 // the first two values don't matter, because we are not going to use them.
                 // TODO: find a better way to do this.
-                ct(null as any, null as any, this.__state);
+                ct(null as any, null as any, this.state);
                 return;
             }
             const res = f(val);
 
             // Adding auto-wrapping of pure values, akin to JS promises.
             // This means we can never create Signal<Signal<T>>.
-            // Are we trading off some capabilities for synthatic convenience?
-            if (!(res instanceof SignalImpl)) return ct(res, this.__inputs, this.__state);
+            // Are we trading off some capabilities for syntactic convenience?
+            if (!(res instanceof SignalImpl)) return ct(res, this.inputs, this.state);
             
             const resV = res.value;
-            ct(resV, new Set([...this.__inputs, ...res.__inputs]), this.__state);
+            ct(resV, new Set([...this.inputs, ...res.inputs]), this.state);
         }, name);
     }
 
@@ -102,39 +102,39 @@ class SignalImpl<T> implements Signal<T> {
         return `Signal('${this.name}', ${this.id})`;
     }
     get value(): T {
-        if (this.__state !== State.DIRTY) return this.__value;
-        // during the readers can change, so we remove them first.
+        if (this.state !== State.DIRTY) return this.#cachedValue;
+        // during recomputation the readers can change, so we remove them first.
         // TODO: use counters trick to optimize this.
         // https://github.com/angular/angular/tree/a1b4c281f384cfd273d81ce10edc3bb2530f6ecf/packages/core/src/signals#equality-semantics
-        for (let i of this.__inputs) i.__readers.delete(this.ref);
-        this.__ct((x: T, inputs, downstreamState) => {
-            if (downstreamState === State.CLEAN_AND_SAME_VALUE) {
-                this.__state = State.CLEAN_AND_SAME_VALUE;
+        for (let i of this.inputs) i.readers.delete(this.#ref);
+        this.__ct((x: T, inputs, upstreamState) => {
+            if (upstreamState === State.CLEAN_AND_SAME_VALUE) {
+                this.state = State.CLEAN_AND_SAME_VALUE;
                 // inputs can't change if the downstream value was the same.
                 return;
             }
-            if (this.eq(x, this.__value)) {
-                this.__state = State.CLEAN_AND_SAME_VALUE;
+            if (this.eq(x, this.#cachedValue)) {
+                this.state = State.CLEAN_AND_SAME_VALUE;
             } else {
-                this.__state = State.CLEAN_AND_DIFFERENT_VALUE;
-                this.__value = x;
+                this.state = State.CLEAN_AND_DIFFERENT_VALUE;
+                this.#cachedValue = x;
             }
             // note that inputs can change even if the value is the same.
-            this.__inputs = inputs;
+            this.inputs = inputs;
         });
-        for (let i of this.__inputs) i.__readers.add(this.ref);
-        return this.__value;
+        for (let i of this.inputs) i.readers.add(this.#ref);
+        return this.#cachedValue;
     }
 }
 
 class InputImpl<T> extends SignalImpl<T> {
-    __inputs: Set<InputImpl<any>> = new Set([this]);
+    inputs: Set<InputImpl<any>> = new Set([this]);
     // Using WeakRef here to avoid retaining reference to readers.
-    __readers: Set<WeakRef<SignalImpl<any>>> = new Set();
+    readers: Set<WeakRef<SignalImpl<any>>> = new Set();
 
-    constructor(protected val: T, name?: string) {
+    constructor(private val: T, name?: string) {
         // State.CLEAN_AND_SAME_VALUE is not possible here, because we handle that in the setter.
-        super(ct => ct(this.val, this.__inputs, State.CLEAN_AND_DIFFERENT_VALUE), name);
+        super(ct => ct(this.val, this.inputs, State.CLEAN_AND_DIFFERENT_VALUE), name);
     }
     get value(): T {
         return this.val;
@@ -142,9 +142,9 @@ class InputImpl<T> extends SignalImpl<T> {
     set value(t: T) {
         if (this.eq(this.val, t)) return;
         this.val = t;
-        for (let r of this.__readers) {
+        for (let r of this.readers) {
             let reader = r.deref();
-            if (reader) reader.__state = State.DIRTY;
+            if (reader) reader.state = State.DIRTY;
         }
     }
 }
