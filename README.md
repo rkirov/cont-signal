@@ -2,7 +2,7 @@
 
 ## How to use it
 
-This library provides an quite unorthodox implemenation of what is currently
+This library provides an quite unorthodox implementation of what is currently
 referred as `fine-grained reactivity` or `signals` in the JS web
 frameworks community.
 
@@ -113,7 +113,8 @@ I started with the simple continuation monad:
 ```ts
 type Ct<T> = (ct: (t: T) => void) => void;  
 const ret: <T>(t:T) => Ct<T> = t => ct => ct(t);
-const bind: <S, T>(sCt: Ct<S>, f: (s: S) => Ct<T>) => Ct<T> = (sCt, f) => tCt => sCt(s => f(s)(t => tCt(t)));
+const bind: <S, T>(sCt: Ct<S>, f: (s: S) => Ct<T>) => Ct<T> =
+    (sCt, f) => tCt => sCt(s => f(s)(t => tCt(t)));
 ```
 
 Note just these two simple functions provide 'fine-grained' recomputation:
@@ -143,13 +144,13 @@ reuses the continuation to perform all recomputation.
 
 I consider this library still a work-in-progress. My next tasks would be:
 
-[ ] add more tests, I still have doubts about the correctness of the algorithms used.
-[ ] add more examples, especially full incremental algorithms like [incremental quicksort](https://github.com/rkirov/adapt-comp/blob/master/examples/aqsort_simple.test.ts)
-[ ] more efficient aggregation of inputs and invalidation like Angular Signals.
-[ ] add support for propagating thrown errors during recomputation.
-[ ] add support for 'multi-read', something like `read([xS,yS], (x,y) => {...})`. While `x.read(x => y.read(y => {...}))` works, it recreates the inner signal on each recomputation for `x`. In a way the library, assumes `y` was read as by-product of the specific value for `x`, so it has to be recreated. But there is
+- [ ] add more tests, I still have doubts about the correctness of the algorithms used.
+- [ ] add more examples, especially full incremental algorithms like [incremental quicksort](https://github.com/rkirov/adapt-comp/blob/master/examples/aqsort_simple.test.ts)
+- [ ] more efficient aggregation of inputs and invalidation like Angular Signals.
+- [ ] add support for propagating thrown errors during recomputation.
+- [ ] add support for 'multi-read', something like `read([xS,yS], (x,y) => {...})`. While `x.read(x => y.read(y => {...}))` works, it recreates the inner signal on each recomputation for `x`. In a way the library, assumes `y` was read as by-product of the specific value for `x`, so it has to be recreated. But there is
 no current way to declare `read x and y independent of their values`.
-[ ] benchmark performance and memory usage. It was not an explicit goal of the current implementation, but there could be benefits of the minimal continuation approach.
-[ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
-[ ] add effects, i.e. computations that are recomputed without an explicit .value read.
-[ ] some `async/await`-like synthetic sugar to make this acceptable for the JS developer. Or just wait for `do`-notation to land in ECMAScript. Try to use something like [https://github.com/pelotom/burrido](https://github.com/pelotom/burrido) to use generators?
+- [ ] benchmark performance and memory usage. It was not an explicit goal of the current implementation, but there could be benefits of the minimal continuation approach.
+- [ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
+- [ ] add effects, i.e. computations that are recomputed without an explicit .value read.
+- [ ] some `async/await`-like synthetic sugar to make this acceptable for the JS developer. Or just wait for `do`-notation to land in ECMAScript. Try to use something like [https://github.com/pelotom/burrido](https://github.com/pelotom/burrido) to use generators?
