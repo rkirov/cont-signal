@@ -27,6 +27,13 @@ enum State {
     DIRTY,
 }
 
+enum GLOBAL_STATE {
+    READY,
+    COMPUTING,
+}
+
+let globalState = GLOBAL_STATE.READY;
+
 /**
  * We need two extra pieces of information to propagate through the
  * continuations:
@@ -83,7 +90,11 @@ class SignalImpl<T> implements Signal<T> {
                 ct(null as any, null as any, this.state);
                 return;
             }
+
+            globalState = GLOBAL_STATE.COMPUTING;
             const res = f(val);
+            globalState = GLOBAL_STATE.READY;
+
 
             // Adding auto-wrapping of pure values, akin to JS promises.
             // This means we can never create Signal<Signal<T>>.
@@ -102,6 +113,9 @@ class SignalImpl<T> implements Signal<T> {
         return `Signal('${this.name}', ${this.id})`;
     }
     get value(): T {
+        if (globalState === GLOBAL_STATE.COMPUTING) {
+            throw new Error(`error: non-reactive read of signal ${this}. Please use .read()`);
+        }
         if (this.state !== State.DIRTY) return this.#cachedValue;
         // during recomputation the readers can change, so we remove them first.
         // TODO: use counters trick to optimize this.
@@ -136,6 +150,9 @@ class InputImpl<T> extends SignalImpl<T> {
         super(_ => {throw new Error(`error: inputs continuation shouldn't be called`)}, name);
     }
     get value(): T {
+        if (globalState === GLOBAL_STATE.COMPUTING) {
+            throw new Error(`error: non-reactive read of signal ${this}. Please use .read()`);
+        }
         return this.val;
     }
     set value(t: T) {
