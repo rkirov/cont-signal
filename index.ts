@@ -113,9 +113,7 @@ class SignalImpl<T> implements Signal<T> {
         return `Signal('${this.name}', ${this.id})`;
     }
     get value(): T {
-        if (globalState === GLOBAL_STATE.COMPUTING) {
-            throw new Error(`error: non-reactive read of signal ${this}. Please use .read()`);
-        }
+        this.checkGlobalState();
         if (this.state !== State.DIRTY) return this.#cachedValue;
         // during recomputation the readers can change, so we remove them first.
         // TODO: use counters trick to optimize this.
@@ -139,6 +137,14 @@ class SignalImpl<T> implements Signal<T> {
         for (let i of this.inputs) i.readers.add(this.#ref);
         return this.#cachedValue;
     }
+
+    protected checkGlobalState() {
+        if (globalState === GLOBAL_STATE.COMPUTING) {
+            // reset global state before throwing.
+            globalState = GLOBAL_STATE.READY;
+            throw new Error(`error: non-reactive read of signal ${this}. Please use .read()`);
+        }
+    }
 }
 
 class InputImpl<T> extends SignalImpl<T> {
@@ -150,12 +156,11 @@ class InputImpl<T> extends SignalImpl<T> {
         super(_ => {throw new Error(`error: inputs continuation shouldn't be called`)}, name);
     }
     get value(): T {
-        if (globalState === GLOBAL_STATE.COMPUTING) {
-            throw new Error(`error: non-reactive read of signal ${this}. Please use .read()`);
-        }
+        this.checkGlobalState();
         return this.val;
     }
     set value(t: T) {
+        this.checkGlobalState();
         if (this.eq(this.val, t)) return;
         this.val = t;
         for (let r of this.readers) {

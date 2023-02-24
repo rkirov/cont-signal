@@ -10,6 +10,18 @@ test('basic signal', () => {
     expect(double.value).toBe(12);
 });
 
+test('basic pass-through', () => {
+    const a = input(1);
+    const b = a.read(x => x);
+    expect(b.value).toBe(1);
+});
+
+test('basic return signal', () => {
+    const a = input(1);
+    const b = a.read(_ => a);
+    expect(b.value).toBe(1);
+});
+
 test('nested readers', () => {
     const a = input(1);
     const b = input(2);
