@@ -115,3 +115,14 @@ test('detached signals do not trigger a recomputation', () => {
     expect(xCount).toBe(2);
     expect(yCount).toBe(2);
 });
+
+test('uncomputed signals are not skipped', () => {
+    const x = input(0, 'x');
+    const y = x.read(x => x % 2, 'y');
+    const z = y.read(x => x + 2, 'z');
+    // compute but not z
+    expect(y.value).toBe(0);
+
+    x.value = 2;
+    expect(z.value).toBe(2);
+});

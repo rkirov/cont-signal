@@ -7,20 +7,21 @@
 
 export interface Signal<T> {
     get value(): T;
-    read<S>(f: (t: T) => S|Signal<S>): Signal<S>;
+    read<S>(f: (t: T) => S|Signal<S>, debugName?: string): Signal<S>;
 }
 
 export interface Input<T> extends Signal<T> {
     set value(t: T);
 }
 
-export function input<T>(t: T, name?: string): Input<T> {
-    return new InputImpl(t, name);
+export function input<T>(t: T, debugName?: string): Input<T> {
+    return new InputImpl(t, debugName);
 }
 
 const REFERENTIAL_EQUALITY = <T>(a: T, b: T) => a === b;
 
 enum State {
+    INITIAL,
     // For optimization each signal keeps track of whether its value is the same as previous value.
     CLEAN_AND_SAME_VALUE,
     CLEAN_AND_DIFFERENT_VALUE,
@@ -34,6 +35,10 @@ enum GLOBAL_STATE {
 
 let globalState = GLOBAL_STATE.READY;
 
+// Allows to skip the non-reactive read check for debugging.
+// TODO: expose API for this.
+let DEBUG = false;
+
 /**
  * We need two extra pieces of information to propagate through the
  * continuations:
@@ -43,7 +48,11 @@ let globalState = GLOBAL_STATE.READY;
 type Continuation<T> = (t: T, inputs: Set<InputImpl<any>>, upstreamState: State) => void;
 // In Haskell, this would be a value in the continuation monad, but I can't
 // find a standard way to name it so it is different from the continuation type.
-type ContValue<T> = (ct: Continuation<T>) => void;
+/**
+ * One extra piece of information compared to the continuation type:
+ *   - the current state of the signal.
+ */
+type ContValue<T> = (ct: Continuation<T>, curState: State) => void;
 
 /**
  * Global count of signals created. Used for debugging only.
@@ -55,7 +64,7 @@ class SignalImpl<T> implements Signal<T> {
      * True initially, so that the first read will trigger a computation.
      * After that, false when at least one input in the transitive closure has changed.
      */
-    state = State.DIRTY;
+    state = State.INITIAL;
 
     /**
      * Cache value of the computation. Represents the signal value only if state is CLEAN_.
@@ -82,9 +91,9 @@ class SignalImpl<T> implements Signal<T> {
      */
     constructor(private ct: ContValue<T>, private name?: string) { }
     read<S>(f: (t: T) => S|SignalImpl<S>, name?: string): SignalImpl<S> {
-        return new SignalImpl<S>(ct => {
+        return new SignalImpl<S>((ct, curState) => {
             const val = this.value;
-            if (this.state === State.CLEAN_AND_SAME_VALUE) {
+            if (this.state === State.CLEAN_AND_SAME_VALUE && curState !== State.INITIAL) {
                 // the first two values don't matter, because we are not going to use them.
                 // TODO: find a better way to do this.
                 ct(null as any, null as any, this.state);
@@ -94,7 +103,6 @@ class SignalImpl<T> implements Signal<T> {
             globalState = GLOBAL_STATE.COMPUTING;
             const res = f(val);
             globalState = GLOBAL_STATE.READY;
-
 
             // Adding auto-wrapping of pure values, akin to JS promises.
             // This means we can never create Signal<Signal<T>>.
@@ -114,13 +122,14 @@ class SignalImpl<T> implements Signal<T> {
     }
     get value(): T {
         this.checkGlobalState();
-        if (this.state !== State.DIRTY) return this.#cachedValue;
+        if (this.state === State.CLEAN_AND_DIFFERENT_VALUE ||
+            this.state === State.CLEAN_AND_SAME_VALUE) return this.#cachedValue;
         // during recomputation the readers can change, so we remove them first.
         // TODO: use counters trick to optimize this.
         // https://github.com/angular/angular/tree/a1b4c281f384cfd273d81ce10edc3bb2530f6ecf/packages/core/src/signals#equality-semantics
         for (let i of this.inputs) i.readers.delete(this.#ref);
         this.ct((x: T, inputs, upstreamState) => {
-            if (upstreamState === State.CLEAN_AND_SAME_VALUE) {
+            if (upstreamState === State.CLEAN_AND_SAME_VALUE && this.state !== State.INITIAL) {
                 this.state = State.CLEAN_AND_SAME_VALUE;
                 // inputs can't change if the downstream value was the same.
                 return;
@@ -133,12 +142,13 @@ class SignalImpl<T> implements Signal<T> {
             }
             // note that inputs can change even if the value is the same.
             this.inputs = inputs;
-        });
+        }, this.state);
         for (let i of this.inputs) i.readers.add(this.#ref);
         return this.#cachedValue;
     }
 
     protected checkGlobalState() {
+        if (DEBUG) return;
         if (globalState === GLOBAL_STATE.COMPUTING) {
             // reset global state before throwing.
             globalState = GLOBAL_STATE.READY;

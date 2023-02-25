@@ -147,7 +147,6 @@ reuses the continuation to perform all recomputation.
 I consider this library still a work-in-progress. My next tasks would be:
 
 - [ ] add more tests, I still have doubts about the correctness of the algorithms used.
-- [ ] add more examples, especially full incremental algorithms like [incremental quicksort](https://github.com/rkirov/adapt-comp/blob/master/examples/aqsort_simple.test.ts)
 - [ ] more efficient aggregation of inputs and invalidation like Angular Signals.
 - [ ] add support for propagating thrown errors during recomputation.
 - [ ] add support for 'multi-read', something like `read([xS,yS], (x,y) => {...})`. While `x.read(x => y.read(y => {...}))` works, it recreates the inner signal on each recomputation for `x`. In a way the library, assumes `y` was read as by-product of the specific value for `x`, so it has to be recreated. But there is
