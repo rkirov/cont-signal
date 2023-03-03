@@ -1,4 +1,4 @@
-import {input} from '.';
+import {input, read} from '.';
 
 test('basic signal', () => {
     const a = input(1);
@@ -38,6 +38,27 @@ test('read returning signal', () => {
     const b = input(2);
     const c = input(false);
     const res = c.read(c => c ? a : b);
+    expect(res.value).toBe(2);
+    c.value = true;
+    expect(res.value).toBe(1);
+});
+
+test('multi read returning value', () => {
+    const a = input(1);
+    const b = input(2);
+    const c = read(a, b, (a, b) => a + b);
+    expect(c.value).toBe(3);
+    a.value = 5;
+    expect(c.value).toBe(7);
+    b.value = 10;
+    expect(c.value).toBe(15);
+});
+
+test('multi read returning signal', () => {
+    const a = input(1);
+    const b = input(2);
+    const c = input(false);
+    const res = read(a, b, c, (a, b, c) => c ? a : b);
     expect(res.value).toBe(2);
     c.value = true;
     expect(res.value).toBe(1);

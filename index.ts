@@ -7,7 +7,7 @@
 
 export interface Signal<T> {
     get value(): T;
-    read<S>(f: (t: T) => S|Signal<S>, debugName?: string): Signal<S>;
+    read<S>(f: (t: T) => S | Signal<S>, debugName?: string): Signal<S>;
 }
 
 export interface Input<T> extends Signal<T> {
@@ -57,7 +57,7 @@ type ContValue<T> = (ct: Continuation<T>, curState: State) => void;
 /**
  * Global count of signals created. Used for debugging only.
  */
- let COUNT = 0;
+let COUNT = 0;
 
 class SignalImpl<T> implements Signal<T> {
     /**
@@ -90,28 +90,8 @@ class SignalImpl<T> implements Signal<T> {
      * Name is optional, used for debugging only.
      */
     constructor(private ct: ContValue<T>, private name?: string) { }
-    read<S>(f: (t: T) => S|SignalImpl<S>, name?: string): SignalImpl<S> {
-        return new SignalImpl<S>((ct, curState) => {
-            const val = this.value;
-            if (this.state === State.CLEAN_AND_SAME_VALUE && curState !== State.INITIAL) {
-                // the first two values don't matter, because we are not going to use them.
-                // TODO: find a better way to do this.
-                ct(null as any, null as any, this.state);
-                return;
-            }
-
-            globalState = GLOBAL_STATE.COMPUTING;
-            const res = f(val);
-            globalState = GLOBAL_STATE.READY;
-
-            // Adding auto-wrapping of pure values, akin to JS promises.
-            // This means we can never create Signal<Signal<T>>.
-            // Are we trading off some capabilities for syntactic convenience?
-            if (!(res instanceof SignalImpl)) return ct(res, this.inputs, this.state);
-            
-            const resV = res.value;
-            ct(resV, new Set([...this.inputs, ...res.inputs]), this.state);
-        }, name);
+    read<S>(f: (t: T) => S | SignalImpl<S>, name?: string): SignalImpl<S> {
+        return new SignalImpl<S>(makeCt([this], f), name);
     }
 
     /**
@@ -163,7 +143,7 @@ class InputImpl<T> extends SignalImpl<T> {
     readers: Set<WeakRef<SignalImpl<any>>> = new Set();
 
     constructor(private val: T, name?: string) {
-        super(_ => {throw new Error(`error: inputs continuation shouldn't be called`)}, name);
+        super(_ => { throw new Error(`error: inputs continuation shouldn't be called`) }, name);
     }
     get value(): T {
         this.checkGlobalState();
@@ -180,3 +160,41 @@ class InputImpl<T> extends SignalImpl<T> {
     }
 }
 
+function makeCt<T>(signals: SignalImpl<any>[], f: (...args: any[]) => T | SignalImpl<T>): ContValue<T> {
+    return (ct, curState) => {
+        let inputs = new Set<InputImpl<any>>();
+        let values = signals.map(s => s.value);
+        for (let s of signals) {
+            inputs = new Set([...inputs, ...s.inputs]);
+        }
+
+        if (signals.map(x => x.state).every(s => s === State.CLEAN_AND_SAME_VALUE) && curState !== State.INITIAL) {
+            // the first two values don't matter, because we are not going to use them.
+            // TODO: find a better way to do this.
+            ct(null as any, null as any, State.CLEAN_AND_SAME_VALUE);
+            return;
+        }
+
+        globalState = GLOBAL_STATE.COMPUTING;
+        let res = f(...values);
+        globalState = GLOBAL_STATE.READY;
+
+        // Adding auto-wrapping of pure values, akin to JS promises.
+        // This means we can never create Signal<Signal<T>>.
+        // Are we trading off some capabilities for syntactic convenience?
+        if (!(res instanceof SignalImpl)) return ct(res, inputs, State.CLEAN_AND_DIFFERENT_VALUE);
+        let resV = res.value;
+        ct(resV, new Set([...inputs, ...res.inputs]), res.state);
+    }
+}
+
+export function read<A, R>(s: Signal<A>, f: (a: A) => R | Signal<R>): Signal<R>;
+export function read<A, B, R>(a: Signal<A>, b: Signal<B>, f: (a: A, b: B) => R | Signal<R>): Signal<R>;
+export function read<A, B, C, R>(a: Signal<A>, b: Signal<B>, c: Signal<C>, f: (a: A, b: B, c: C) => R | Signal<R>): Signal<R>;
+export function read<R>(...args: any[]): Signal<R> {
+    let f = args[args.length - 1] as (...args: any[]) => R | SignalImpl<R>;
+    let signals = args.slice(0, args.length - 1) as SignalImpl<any>[];
+    if (signals.length === 1) return signals[0].read(f);
+
+    return new SignalImpl(makeCt(signals, f));
+}

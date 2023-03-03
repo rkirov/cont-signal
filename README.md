@@ -149,8 +149,6 @@ I consider this library still a work-in-progress. My next tasks would be:
 - [ ] add more tests, I still have doubts about the correctness of the algorithms used.
 - [ ] more efficient aggregation of inputs and invalidation like Angular Signals.
 - [ ] add support for propagating thrown errors during recomputation.
-- [ ] add support for 'multi-read', something like `read([xS,yS], (x,y) => {...})`. While `x.read(x => y.read(y => {...}))` works, it recreates the inner signal on each recomputation for `x`. In a way the library, assumes `y` was read as by-product of the specific value for `x`, so it has to be recreated. But there is
-no current way to declare `read x and y independent of their values`.
 - [ ] benchmark performance and memory usage. It was not an explicit goal of the current implementation, but there could be benefits of the minimal continuation approach.
 - [ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
 - [ ] add effects, i.e. computations that are recomputed without an explicit .value read.
