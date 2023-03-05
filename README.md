@@ -67,9 +67,7 @@ The only non-trivial method is `.read` which one can think of like `Promise.then
 ## Why is reading multiple signals needed?
 
 At first it might seem that reading multiple signals is not necessary. Instead of `read(a, b, f)` one
-can write `a.read(a => b.read(b => f(a, b))`. But their semantics are different. In the first case, when
-`a` changes a whole new signal is recreated on each recomputation. In the second case, no new signals are
-created so it is likely cheaper performance-wise.
+can write `a.read(a => b.read(b => f(a, b))`. But their semantics are different. In the nested signal (later) case, when `a` changes a whole new signal is recreated on each recomputation. In the multi-read (former) case, no new signals are created so it is likely cheaper performance-wise.
 
 However, reading multiple signals at once means that necessarily `f` is recomputed on changes in `a` or `b`,
 even if the computation doesn't need one of them.
