@@ -43,7 +43,7 @@ Monad in the functional programming community. That said, you don't need
  of implementation.
 
 The whole external interface can be summarized in two interfaces and
-one constructor function:
+two exported functions:
 
 ```ts
 export interface Signal<T> {
@@ -55,10 +55,47 @@ export interface Input<T> extends Signal<T> {
     set value(t: T);
 }
 
-export function input<T>(t: T): Input<T> {...};
+export function input<T>(t: T): Input<T>;
+
+export function read<A, B, R>(a: Signal<A>, b: Signal<B>, f: (a: A, b: B): R|Signal<R>): Signal<R>;
+export function read<A, B, R>(a: Signal<A>, b: Signal<B>, c: Signal<C>, f: (a: A, b: B, c: C): R|Signal<R>): Signal<R>;
+// etc ...
 ```
 
 The only non-trivial method is `.read` which one can think of like `Promise.then`, but with different meaning (can run multiple times for example).
+
+## Why is reading multiple signals needed?
+
+At first it might seem that reading multiple signals is not necessary. Instead of `read(a, b, f)` one
+can write `a.read(a => b.read(b => f(a, b))`. But their semantics are different. In the first case, when
+`a` changes a whole new signal is recreated on each recomputation. In the second case, no new signals are
+created so it is likely cheaper performance-wise.
+
+However, reading multiple signals at once means that necessarily `f` is recomputed on changes in `a` or `b`,
+even if the computation doesn't need one of them.
+
+So
+
+```ts
+read(a, b, (a, b) => {
+    if (a === 0) return 0;
+    return a + b;
+});
+```
+
+would recompute on `b` changes even if `a` is zero. While
+
+```ts
+a.read(a => {
+    if (a === 0) return 0;
+    return b.read(b => {
+        return a + b;
+    });
+});
+```
+
+Will be more efficient in recomputations, at the expense of recreating an inner signal for `b.read` on
+each `a` recomputation.
 
 ## Background
 
@@ -153,3 +190,4 @@ I consider this library still a work-in-progress. My next tasks would be:
 - [ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
 - [ ] add effects, i.e. computations that are recomputed without an explicit .value read.
 - [ ] some `async/await`-like synthetic sugar to make this acceptable for the JS developer. Or just wait for `do`-notation to land in ECMAScript. Try to use something like [https://github.com/pelotom/burrido](https://github.com/pelotom/burrido) to use generators?
+- [ ] Smarter keeping track of values. `x = 1; x = 2; x = 1` will trigger recomputation of all x dependencies.

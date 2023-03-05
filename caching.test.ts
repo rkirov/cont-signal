@@ -91,27 +91,27 @@ test('detached signals do not trigger a recomputation', () => {
 
     x.value = 'x2';
     expect(z.value).toBe('x2');
-    expect(bCount).toBe(2);
+    expect(bCount).toBe(1);
     expect(xCount).toBe(2);
     expect(yCount).toBe(0);
 
     // flip the boolean
     b.value = false;
     expect(z.value).toBe('y2');
-    expect(bCount).toBe(3);
+    expect(bCount).toBe(2);
     expect(xCount).toBe(2);
     expect(yCount).toBe(1);
 
     x.value = 'x3';
     expect(z.value).toBe('y2');
-    expect(bCount).toBe(3);
+    expect(bCount).toBe(2);
     expect(xCount).toBe(2);
     expect(yCount).toBe(1);
       
     y.value = 'y3';
     expect(z.value).toBe('y3');
     // no change, all cached.
-    expect(bCount).toBe(4);
+    expect(bCount).toBe(2);
     expect(xCount).toBe(2);
     expect(yCount).toBe(2);
 });
@@ -125,4 +125,26 @@ test('uncomputed signals are not skipped', () => {
 
     x.value = 2;
     expect(z.value).toBe(2);
+});
+
+test('nested reads are cached', () => {
+    const x = input(0);
+    const y = input(0);
+    let countX = 0;
+    let countY = 0;
+    const sum = x.read(x => {
+        countX++;
+        return y.read(y => {
+            countY++;
+            return x + y;
+        });
+    });
+    expect(sum.value).toBe(0);
+    expect(countX).toBe(1);
+    expect(countY).toBe(1);
+
+    y.value = 1;
+    expect(sum.value).toBe(1);
+    expect(countX).toBe(1);
+    expect(countY).toBe(2);
 });
