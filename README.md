@@ -187,5 +187,5 @@ I consider this library still a work-in-progress. My next tasks would be:
 - [ ] benchmark performance and memory usage. It was not an explicit goal of the current implementation, but there could be benefits of the minimal continuation approach.
 - [ ] Make sure there are no mem leaks. I used WeakRef, but didn't test that.
 - [ ] add effects, i.e. computations that are recomputed without an explicit .value read.
-- [ ] some `async/await`-like synthetic sugar to make this acceptable for the JS developer. Or just wait for `do`-notation to land in ECMAScript. Try to use something like [https://github.com/pelotom/burrido](https://github.com/pelotom/burrido) to use generators?
 - [ ] Smarter keeping track of values. `x = 1; x = 2; x = 1` will trigger recomputation of all x dependencies.
+- [ ] fix burrido wrapper types if possible.
